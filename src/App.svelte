@@ -2,7 +2,8 @@
   import { onMount } from 'svelte';
   import { MAX_SYMBOLS, addSymbol, cleanSymbol, formatChange, formatPrice, formatTime, isUp, isValidSymbol, removeSymbol, type Quote } from './logic';
   import { fetchQuote, problemText, QuoteError } from './quotes';
-  import { paletteFrom, type Palette } from './palette';
+  import { t, setLanguage, currentLanguage } from './i18n/index.svelte';
+  import { paletteFrom, glassFrom, tintTextFrom, type Palette, type Glass } from './palette';
   import { onPrefsChange } from './prefs-live';
 
   type Settings = { apiKey: string; symbols: Array<string> };
@@ -15,6 +16,8 @@
   let plugin: any;
   let view = $state<'modal' | 'widget'>('modal');
   let palette = $state<Palette>(paletteFrom(undefined));
+  let glass = $state<Glass>(glassFrom(undefined));
+  let tintText = $state(tintTextFrom(undefined));
   let scale = $state(1);
   let ready = $state(false);
   let settings = $state<Settings>({ apiKey: '', symbols: [] });
@@ -31,6 +34,9 @@
   const applyNomieValues = () => {
     if (!plugin?.prefs) return;
     palette = paletteFrom(plugin.prefs);
+    setLanguage(plugin.prefs?.language);
+    glass = glassFrom(plugin.prefs);
+    tintText = tintTextFrom(plugin.prefs);
     scale = plugin.prefs.fontScale || 1;
   };
 
@@ -72,15 +78,15 @@
   const addStock = async () => {
     const symbol = cleanSymbol(symbolDraft);
     if (!isValidSymbol(symbol)) {
-      notice = 'Use a ticker such as AAPL.';
+      notice = t('noticeTicker');
       return;
     }
     if (settings.symbols.includes(symbol)) {
-      notice = `You already follow ${symbol}.`;
+      notice = t('noticeFollowing', { symbol });
       return;
     }
     if (settings.symbols.length >= MAX_SYMBOLS) {
-      notice = `You can follow up to ${MAX_SYMBOLS} stocks. Remove one first.`;
+      notice = t('noticeFull', { max: MAX_SYMBOLS });
       return;
     }
     settings.symbols = addSymbol(settings.symbols, symbol);
@@ -101,7 +107,7 @@
     settings.apiKey = keyDraft.trim();
     keyDraft = settings.apiKey;
     save();
-    notice = settings.apiKey ? 'Key saved.' : 'Key removed.';
+    notice = settings.apiKey ? t('keySaved') : t('keyRemoved');
     await refresh(true);
   };
 
@@ -136,12 +142,12 @@
   });
 </script>
 
-<div class="card" class:widget={view === 'widget'} style="--page: {palette.page}; --card: {palette.card}; --text: {palette.text}; --muted: {palette.textSecondary}; --line: {palette.separator}; --tint: {palette.tint}; --on-tint: {palette.onTint}; --good: {palette.good}; --bad: {palette.bad}; --scale: {scale};">
+<div class="card" class:widget={view === 'widget'} style="--page: {palette.page}; --card: {palette.card}; --text: {palette.text}; --muted: {palette.textSecondary}; --line: {palette.separator}; --tint: {palette.tint}; --on-tint: {palette.onTint}; --good: {palette.good}; --bad: {palette.bad}; --tint-text: {tintText}; --glass-fill: {glass.fill}; --glass-edge: {glass.edge}; --glass-blur: {glass.blur}; --glass-shadow: {glass.shadow}; --scale: {scale};">
   {#if view === 'widget'}
     {#if !settings.apiKey}
-      <p class="muted">Add your Finnhub key in Nomie Stocks to see prices.</p>
+      <p class="muted">{t('widgetNoKey')}</p>
     {:else if settings.symbols.length === 0}
-      <p class="muted">Follow a stock in Nomie Stocks to see it here.</p>
+      <p class="muted">{t('widgetNoStock')}</p>
     {:else}
       {#each shown as row (row.symbol)}
         <div class="line">
@@ -150,64 +156,68 @@
             <span class="grow">{formatPrice(row.quote.price)}</span>
             <span class="change" class:up={isUp(row.quote)} class:down={!isUp(row.quote)}>{formatChange(row.quote)}</span>
           {:else}
-            <span class="grow muted">{row.error ?? 'Loading…'}</span>
+            <span class="grow muted">{row.error ?? t('loading')}</span>
           {/if}
         </div>
       {/each}
     {/if}
   {:else}
-    <h1>Stocks</h1>
-    <p class="muted">Up to {MAX_SYMBOLS} stocks, with prices from Finnhub.</p>
+    <header class="top"><h1>{t('title')}</h1></header>
+    <p class="muted">{t('intro', { max: MAX_SYMBOLS })}</p>
 
-    <h2>Your stocks</h2>
+    <h2>{t('yourStocks')}</h2>
     <section class="panel">
       {#each shown as row (row.symbol)}
         <div class="stock">
           <div class="stock-head">
-            <span><strong>{row.symbol}</strong>{#if row.quote && row.quote.time}<span class="muted">&nbsp;&middot;&nbsp;{formatTime(row.quote.time)}</span>{/if}</span>
-            <button class="link" onclick={() => removeStock(row.symbol)}>Remove</button>
+            <span><strong>{row.symbol}</strong>{#if row.quote && row.quote.time}<span class="muted">&nbsp;&middot;&nbsp;{formatTime(row.quote.time, currentLanguage())}</span>{/if}</span>
+            <button class="link" onclick={() => removeStock(row.symbol)}>{t('remove')}</button>
           </div>
           {#if row.quote}
             <p class="big">{formatPrice(row.quote.price)} <span class="change" class:up={isUp(row.quote)} class:down={!isUp(row.quote)}>{formatChange(row.quote)}</span></p>
-            <p class="muted">Today: {formatPrice(row.quote.low)} to {formatPrice(row.quote.high)}</p>
+            <p class="muted">{t('todayRange', { low: formatPrice(row.quote.low), high: formatPrice(row.quote.high) })}</p>
           {:else}
-            <p class="muted">{row.error ?? (settings.apiKey ? 'Loading…' : 'Add your key below to see the price.')}</p>
+            <p class="muted">{row.error ?? (settings.apiKey ? t('loading') : t('addKeyBelow'))}</p>
           {/if}
         </div>
       {:else}
-        <p class="muted">No stocks yet.</p>
+        <p class="muted">{t('noStocks')}</p>
       {/each}
 
       {#if settings.symbols.length < MAX_SYMBOLS}
         <form class="add" onsubmit={(e) => { e.preventDefault(); addStock(); }}>
-          <input bind:value={symbolDraft} placeholder="Ticker, such as AAPL" maxlength="10" autocapitalize="characters" autocomplete="off" spellcheck="false" />
-          <button class="primary" type="submit" disabled={!symbolDraft.trim()}>Follow stock</button>
+          <input bind:value={symbolDraft} placeholder={t('tickerPh')} maxlength="10" autocapitalize="characters" autocomplete="off" spellcheck="false" />
+          <button class="primary" type="submit" disabled={!symbolDraft.trim()}>{t('follow')}</button>
         </form>
       {/if}
 
       {#if notice}<p class="notice">{notice}</p>{/if}
 
       <button class="secondary" onclick={() => refresh(true)} disabled={loading || !settings.apiKey || settings.symbols.length === 0}>
-        {loading ? 'Loading…' : 'Refresh prices'}
+        {loading ? t('loading') : t('refresh')}
       </button>
-      {#if updated}<p class="muted small">Updated {formatTime(updated / 1000)}</p>{/if}
+      {#if updated}<p class="muted small">{t('updated', { time: formatTime(updated / 1000, currentLanguage()) })}</p>{/if}
     </section>
 
-    <h2>Finnhub key</h2>
+    <h2>{t('keyHead')}</h2>
     <section class="panel">
       <form onsubmit={(e) => { e.preventDefault(); saveKey(); }}>
-        <input bind:value={keyDraft} placeholder="Paste your API key" autocomplete="off" autocapitalize="off" spellcheck="false" aria-label="Finnhub API key" />
-        <button class="primary" type="submit" disabled={keyDraft.trim() === settings.apiKey}>Save key</button>
+        <input bind:value={keyDraft} placeholder={t('keyPh')} autocomplete="off" autocapitalize="off" spellcheck="false" aria-label={t('keyAria')} />
+        <button class="primary" type="submit" disabled={keyDraft.trim() === settings.apiKey}>{t('saveKey')}</button>
       </form>
-      <p class="muted">Get a free key at finnhub.io. It is saved in this plugin's data, and a Nomie backup includes it.</p>
+      <p class="muted">{t('keyHelp')}</p>
     </section>
   {/if}
 </div>
 
 <style>
+  /* the app's text: its iOS font stack, with the app's smoothing */
+  :global(body) { margin: 0; font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, sans-serif; -webkit-font-smoothing: antialiased; --ios-font-rounded: ui-rounded, -apple-system, system-ui, sans-serif; }
+  /* the header is a Liquid Glass bar (D-glass): it stays at the top and the content scrolls under it */
+  .top { position: sticky; top: 0; z-index: 2; margin: -16px -16px 8px; padding: 16px 16px 10px; background: var(--glass-fill); -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur); border-bottom: 1px solid var(--glass-edge); }
   .card { box-sizing: border-box; min-height: 100vh; padding: 16px; background: var(--page); color: var(--text); font-size: calc(17px * var(--scale)); line-height: 1.4; }
   .card.widget { min-height: 0; padding: 12px; font-size: calc(15px * var(--scale)); }
-  h1 { margin: 0 0 4px; font-size: calc(28px * var(--scale)); font-weight: 700; }
+  h1 { margin: 0; font-size: calc(28px * var(--scale)); font-weight: 700; }
   h2 { margin: 24px 0 8px; font-size: calc(13px * var(--scale)); font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
   .muted { margin: 0; color: var(--muted); }
   .small { font-size: calc(13px * var(--scale)); }
@@ -216,7 +226,7 @@
   .stock { padding: 12px 0; border-top: 1px solid var(--line); }
   .stock:first-of-type { border-top: 0; padding-top: 0; }
   .stock-head { display: flex; justify-content: space-between; align-items: center; }
-  .big { margin: 8px 0 4px; font-size: calc(22px * var(--scale)); font-weight: 600; }
+  .big { font-family: var(--ios-font-rounded); margin: 8px 0 4px; font-size: calc(22px * var(--scale)); font-weight: 600; }
   .change { font-size: calc(15px * var(--scale)); font-weight: 600; }
   .change.up { color: var(--good); }
   .change.down { color: var(--bad); }
@@ -227,7 +237,7 @@
   .primary { background: var(--tint); color: var(--on-tint); }
   .secondary { background: transparent; color: var(--tint); border: 1px solid var(--line); }
   button:disabled { opacity: 0.5; cursor: default; }
-  .link { padding: 4px; border: 0; background: transparent; color: var(--tint); font: inherit; font-size: calc(15px * var(--scale)); cursor: pointer; }
+  .link { padding: 4px; border: 0; background: transparent; color: var(--tint-text); font: inherit; font-size: calc(15px * var(--scale)); cursor: pointer; }
   .line { display: flex; align-items: center; gap: 8px; padding: 4px 0; }
   .symbol { font-weight: 700; min-width: 4em; }
   .grow { flex: 1; }
