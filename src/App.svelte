@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { startSnapshots } from './snapshot';
   import { onMount } from 'svelte';
   import { MAX_SYMBOLS, addSymbol, cleanSymbol, formatChange, formatPrice, formatTime, isUp, isValidSymbol, removeSymbol, type Quote } from './logic';
   import { fetchQuote, problemText, QuoteError } from './quotes';
@@ -122,6 +123,7 @@
       addToMoreMenu: true,
       addToWidgets: true,
     });
+    startSnapshots(plugin);
     onPrefsChange(plugin, () => applyNomieValues());
     plugin.onRegistered(async () => {
       applyNomieValues();
